@@ -22,14 +22,18 @@ package com.popcorn.kony;
 import android.os.Bundle;
 import org.apache.cordova.*;
 
+import com.kony.sdk.KonyCordovaHelper;
+
 public class CordovaApp extends CordovaActivity
 {
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
+       
         super.onCreate(savedInstanceState);
         super.init();
         // Set by <content src="index.html" /> in config.xml
-        loadUrl(launchUrl);
+        super.loadUrl(Config.getStartUrl());
+        KonyCordovaHelper.init(appView, this);
     }
 }
