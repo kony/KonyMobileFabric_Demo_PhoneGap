@@ -10,14 +10,14 @@
 	<string>Kony</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
-		<key>6938BB29E1B34241BCDC2D4A9D9178E786DE206D</key>
+		<key>EA67ECDE18916BFD3AA0DCF924820BD67A40D094</key>
 		<string>ssh://manoj.kumar@gerrit.konylabs.net:29418/KonyMobileFabric_Demo_PhoneGap.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
 	<string>kony/platforms/ios/Kony.xcodeproj</string>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
-		<key>6938BB29E1B34241BCDC2D4A9D9178E786DE206D</key>
+		<key>EA67ECDE18916BFD3AA0DCF924820BD67A40D094</key>
 		<string>../../../../..</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
@@ -25,14 +25,14 @@
 	<key>IDESourceControlProjectVersion</key>
 	<integer>111</integer>
 	<key>IDESourceControlProjectWCCIdentifier</key>
-	<string>6938BB29E1B34241BCDC2D4A9D9178E786DE206D</string>
+	<string>EA67ECDE18916BFD3AA0DCF924820BD67A40D094</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>6938BB29E1B34241BCDC2D4A9D9178E786DE206D</string>
+			<string>EA67ECDE18916BFD3AA0DCF924820BD67A40D094</string>
 			<key>IDESourceControlWCCName</key>
 			<string>KonyMobileFabric_Demo_PhoneGap</string>
 		</dict>
