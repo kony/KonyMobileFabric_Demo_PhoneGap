@@ -1,5 +1,5 @@
 KonyMobileFabric_Demo_PhoneGap
-=============
+===================================
 
 This Application showcases how to use Kony MobileFabric SDK's for building a PhoneGap app using SalesForce Authentication.
 
@@ -8,8 +8,11 @@ This Application showcases how to use Kony MobileFabric SDK's for building a Pho
 
 	-Install Node.js from http://nodejs.org/ 
 	-Run this command in cmd(npm install -g cordova)
+	-Go through Kony Document (http://docs.kony.com/tutorials/MobileFabric/#Overview.htm#BuildPhoneGap%3FTocPath%3D_____5)
 	-In the project,go to project folder under www/js folder and open config.js file
 	-Configure your app secret,app id, service URL that you got from your Kony MobileFabric console after app configuration
+	-Remove content of platforms and plugins folder
+	-Add required plugin in project(cordova plugin add ------)
 	-Run these commands
 		For ios:- 
 				cordova platform add ios
