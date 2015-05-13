@@ -88,7 +88,7 @@ var LoginFailureCallback = function(data){
 var BackendTokenSuccessCallback = function(data){
     	
     localStorage.konyAuthorization = data.value; //storing authorization in localstorage
-
+	localStorage.regid ="";
     if(localStorage.regid != ""){
         
             // Registering Device   

@@ -29,7 +29,6 @@ public class CordovaApp extends CordovaActivity
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
-       
         super.onCreate(savedInstanceState);
         super.init();
         // Set by <content src="index.html" /> in config.xml

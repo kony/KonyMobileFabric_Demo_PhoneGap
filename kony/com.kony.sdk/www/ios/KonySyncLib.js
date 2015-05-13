@@ -178,7 +178,6 @@ sync.startSession = function(config) {
 	var registerSuccess = true;
 	var alreadyRegistered = false;
 	var isError = false;
-	
 	function single_transaction_callback(tx) {
 		sync.log.trace("Entering single_transaction_callback");
 		var query = kony.sync.qb_createQuery();
@@ -226,12 +225,19 @@ sync.startSession = function(config) {
 			registerSuccess = false;
 			return;
 		}
+		else if(kony.sync.isNullOrUndefined(serverResponse.d)){
+			registerSuccess = false;
+			kony.sync.isSessionInProgress = false;
+			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onSyncError], kony.sync.getServerError(serverResponse) );
+			return;
+		}
 		if ((serverResponse.d.error === "true")) { 
 			sync.log.error("Register Device Response : ", serverResponse); 
 			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onSyncError], kony.sync.getServerError(
 			serverResponse.d));
 			kony.sync.isSessionInProgress = false;
 			registerSuccess = false;
+
 			return;
 		} 
 		
@@ -563,16 +569,19 @@ kony.sync.preProcessSyncConfig = function(opName, config, errorcallback, session
 	if(!kony.sync.isSyncInitialized(errorcallback)){
 		return false;
 	}
+	if(!kony.sync.scopenameExist(config,errorcallback)){
+		return false;
+	}
 	kony.sync.syncConfigurationDBName = konysyncClientSyncConfig.AppID;
     config.appVersion = kony.sync.configVersion;//konysyncClientSyncConfig.Version;
     kony.sync.currentSyncConfigParams = config;
 	kony.sync.uploadClientContext = {};
 	kony.sync.downloadClientContext = {};
-	if(sessionRequired){
+	if(sessionRequired!==false){
 		if (kony.sync.isSessionInProgress) {
 			sync.log.warn("Sync Session already in progress...");
 			kony.sync.verifyAndCallClosure(errorcallback, kony.sync.getErrorTable(kony.sync.errorCodeSessionInProgress,kony.sync.getErrorMessage(kony.sync.errorCodeSessionInProgress),null));
-			return;
+			return false;
 		}
 		kony.sync.isSessionInProgress = true;
 	}
@@ -581,6 +590,43 @@ kony.sync.preProcessSyncConfig = function(opName, config, errorcallback, session
 	kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey] = kony.sync.tonumber(kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey]);
     kony.sync.currentSyncConfigParams[kony.sync.maxParallelChunksKey] = kony.sync.tonumber(kony.sync.currentSyncConfigParams[kony.sync.maxParallelChunksKey]);
 	kony.sync.resetsyncsessionglobals(opName);
+};
+
+kony.sync.scopenameExist = function(config,errorcallback){
+	sync.log.trace("Entering kony.sync.scopenameExist");
+	if(!kony.sync.isNullOrUndefined(config[kony.sync.sessionTasks])){
+		for(var key in config[kony.sync.sessionTasks]){
+			if(kony.sync.isNullOrUndefined(kony.sync.scopeDict[key])){
+				sync.log.error("Wrong scopename given in SessionTasks");
+				kony.sync.alert("Wrong scopename given in SessionTasks");
+				kony.sync.verifyAndCallClosure(errorcallback, {});
+				return false;
+			}
+		}	
+	}
+	if(!kony.sync.isNullOrUndefined(config[kony.sync.removeAfterUpload])){
+		for(var key in config[kony.sync.removeAfterUpload]){
+			if(kony.sync.isNullOrUndefined(kony.sync.scopeDict[key])){
+				sync.log.error("Wrong scopename given in RemoveAfterUpload");
+				kony.sync.alert("Wrong scopename given in RemoveAfterUpload");
+				kony.sync.verifyAndCallClosure(errorcallback, {});
+				return false;
+			}
+		}	
+	}
+	return true;
+};
+
+sync.stopSession = function(callback){
+	sync.log.trace("Entering sync.stop");
+	kony.sync.isSessionInProgress = false;
+	kony.sync.isSyncStopped = true;
+	kony.sync.onSyncStop = callback;
+};
+
+kony.sync.stopSyncSession = function(){
+	kony.sync.isSyncStopped = false;
+	kony.sync.verifyAndCallClosure(kony.sync.onSyncStop);
 };
 //  **************** End KonySyncAPI.js*******************
 
@@ -669,6 +715,10 @@ kony.sync.startChunking = function(url, serviceParams, result, callback){
 //Starts Chunking
 kony.sync.downloadChunks = function(url, serviceParams, payloadId, chunkCount, hashSum, initialData, isResumed, downloadedChunks, callback){
 	sync.log.trace("Entering kony.sync.downloadChunks");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var retries = kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey];
 	var serverParams = {};
 	serviceParams[kony.sync.payloadIdKey] = payloadId;
@@ -755,6 +805,8 @@ kony.sync.downloadChunks = function(url, serviceParams, payloadId, chunkCount, h
 				kony.sync.setSessionID(result);
 				downloadNetworkCallback(result, info[kony.sync.chunkNoKey]);
 			}
+		}else if(status === 300){
+				downloadNetworkCallback(kony.sync.getNetworkCancelError(),info[kony.sync.chunkNoKey]);
 		}
 	}
 	
@@ -785,11 +837,11 @@ kony.sync.downloadChunks = function(url, serviceParams, payloadId, chunkCount, h
 						kony.sync.invokeServiceAsync(url, serviceParams, downloadNetworkCallbackStatus, infoObj);
 						if(callNo >= noOfParallelCalls + 1){
 							callNo++;
-						break;
+							break;
+						}
 					}
 				}
 			}
-		}
 		}
 		var chunkId = info;
 		if(kony.sync.isValidJSTable(info)){
@@ -1309,8 +1361,6 @@ kony.sync.getChunkingParams = function(serverblob, schemaUpgradeServerblob) {
         serverblob = "";
     }
 	
-    var httpheaders = {};
-    httpheaders["Content-Type"] = "application/json";
     var params = {};
     kony.sync.commonServiceParams(params);
 
@@ -1323,8 +1373,7 @@ kony.sync.getChunkingParams = function(serverblob, schemaUpgradeServerblob) {
 	} else {
 		params.tickcount = serverblob;
 	}
-    params.clientid = kony.sync.getDeviceID();
-    params.appid = kony.sync.getAppId();	
+    params.clientid = kony.sync.getDeviceID();	
 	
 	if(!kony.sync.isNull(kony.sync.currentSyncConfigParams[kony.sync.networkTimeOutKey])){
 		params.httpconfig = {timeout:kony.sync.currentSyncConfigParams[kony.sync.networkTimeOutKey]};
@@ -2313,7 +2362,7 @@ kony.sync.syncDownloadchangesGetLastSynctime = function(rowItem) {
         var morechanges = serverChanges.d.__sync.moreChangesAvailable;
         var serverblob = serverChanges.d.__sync.serverblob;
 		var pendingbatches = serverChanges.d.__sync.pendingBatches;
-		kony.sync.currentSyncReturnParams[kony.sync.lastSyncTimestamp] = serverblob;    
+		kony.sync.currentSyncReturnParams[kony.sync.lastSyncTimestamp] = serverblob;
         if(kony.sync.isApplyChangesSync()){
 			if(kony.sync.applyChanges(tx, kony.sync.currentScope, serverChanges)===false){
 				isError = true;
@@ -2435,11 +2484,14 @@ kony.sync.syncDownloadchangesGetLastSynctime = function(rowItem) {
 			kony.sync.globalIsDownloadStarted = true;
 			if (!kony.sync.isNullOrUndefined(serverChanges.d)) {
 				kony.sync.onDownloadCompletion(true, kony.sync.getServerError(serverChanges.d, "download"));
-		} else {
+			} else {
 				kony.sync.onDownloadCompletion(true, kony.sync.getServerError(serverChanges));
-		}
+			}
 			return;
-        }
+        }else if(kony.sync.isNullOrUndefined(serverChanges.d)){
+			kony.sync.onDownloadCompletion(true, kony.sync.getServerError(serverChanges));
+			return;
+		}
         kony.sync.currentSyncReturnParams[kony.sync.serverDetails] = {};
         kony.sync.currentSyncReturnParams[kony.sync.serverDetails][kony.sync.hostName] = kony.sync.getServerDetailsHostName(serverChanges);
         kony.sync.currentSyncReturnParams[kony.sync.serverDetails][kony.sync.ipAddress] = kony.sync.getServerDetailsIpAddress(serverChanges);
@@ -2672,7 +2724,6 @@ kony.sync.applyChangesToDB = function (context) {
 						for (j = 0; j < pkColumns.length; j++) {
 							pk = pkColumns[j];
 							if (!kony.sync.isNullOrUndefined(row[kony.sync.clientPKPrefix + pk])) {
-								//pkwc = pkwc.." "..pk.."='"..row["Client_"..pk].."'";
 								//pkset = pkset.." "..pk.."='"..row[pk].."'";
 								if (kony.sync.isNullOrUndefined(pkset)) {
 									pkset = [];
@@ -3147,7 +3198,9 @@ kony.sync.errorCodeDownloadFailed = 7021;
 kony.sync.errorCodeSyncError = 7022;
 kony.sync.errorCodeParseError = 7023;
 kony.sync.errorCodeChunking = 7024;
-kony.sync.errorCodeMetatableError = 7025;
+kony.sync.errorCodeNetworkCallCancelled = 7025;
+kony.sync.errorCodeMetatableError = 7026;
+kony.sync.errorCodeNullValue = 7027;
 kony.sync.errorUnknown = 7777;
 kony.sync.errorCodeUnknownServerError = 8888;
 
@@ -3213,7 +3266,7 @@ kony.sync.getServerError = function(ServerReport, moduleType) {
             return kony.sync.getErrorTable(ServerReport.opstatus, ServerReport.errmsg, null, serverDetails);
         }
     }
-    return kony.sync.getErrorTable(kony.sync.errorCodeUnknownServerError, "Unknown Error from the server", null, serverDetails);
+    return kony.sync.getErrorTable(kony.sync.errorCodeUnknownServerError, "Unknown Error from the server", ServerReport, serverDetails);
 };
 
 kony.sync.getErrorTable = function(errorCode, errorMessage, errorInfo, serverDetails, otherParams) {
@@ -3261,6 +3314,7 @@ kony.sync.getErrorMessage = function(errorCode,objectName, attributeName) {
 	errorMap[kony.sync.errorCodeParseError] = "Following error occurred while parsing " + JSON.stringify(objectName) + " : \"" + attributeName + "\"";
 	errorMap[kony.sync.errorCodeChunking] = "Error occurred while downloading one or more chunks.";
 	errorMap[kony.sync.errorCodeMetatableError] = "Meta tables did not get created successfully because of some unknown problem in sync.init, please invoke sync.reset";
+	errorMap[kony.sync.errorCodeNullValue] = "Null values passed in input array";
 	if(errorMap[errorCode]===null){
 		return "Some unknown client error";
 	}	
@@ -3300,6 +3354,13 @@ kony.sync.getSchemaUpgradeNeededError = function(){
 	//TODO:needs to be replaced with actual schema error
 	return kony.sync.getErrorTable(kony.sync.errorCodeSessionBreak,kony.sync.getErrorMessage(kony.sync.errorCodeSessionBreak),null);
 };
+
+kony.sync.getNetworkCancelError = function(){
+	var errCreate = {};
+	errCreate.opstatus = 7025;
+	errCreate.errmsg = "Error occurred, Network Call Cancelled";
+	return errCreate;
+}
 //  **************** End KonySyncErrors.js*******************
 
 
@@ -3621,6 +3682,18 @@ kony.sync.isFirstNetworkCall = true;
 kony.sync.sessionMap = {};
 kony.sync.konySyncSessionID = "konysyncsessionid";
 kony.sync.konySyncRequestNumber = "konysyncrequestnumber";
+
+kony.sync.isSyncStopped = false;
+kony.sync.onSyncStop = null;
+kony.sync.httprequestsession = null;
+
+kony.sync.DDL556to559Update = [];
+kony.sync.DDL559to560Update = [];
+
+kony.sync.scopeDict = {};
+
+kony.sync.isAppInBackground = false;
+kony.sync.isPhonegap = false;
 //  **************** End KonySyncGlobals.js*******************
 
 
@@ -3753,7 +3826,7 @@ kony.sync.removeprovisioncolumns = function (row, columns, isArray, isUpdate) {
 			}	
 			else if(isUpdate !== true){
 				record.push("NULL");
-			}	
+			}
 		}
 		if (!kony.sync.isNullOrUndefined(row.konysynchashsum)) {
 			record.push(row.konysynchashsum);
@@ -3766,7 +3839,7 @@ kony.sync.removeprovisioncolumns = function (row, columns, isArray, isUpdate) {
 			}	
 			else if(isUpdate !== true){
 				record[columns[i].Name] = "NULL";
-			}	
+			}
 		}
 		if(!kony.sync.isNullOrUndefined(row.konysynchashsum)) {
 			record.konysynchashsum = row.konysynchashsum;
@@ -3869,6 +3942,7 @@ kony.sync.resetsyncsessionglobals = function (opName) {
 	sync.log.trace("Entering kony.sync.resetsyncsessionglobals ");
 	kony.sync.currentScope = null;
 	kony.sync.currentSyncReturnParams = {};
+	kony.sync.isSyncStopped = false;
 	if(opName==="startSession"){
 		kony.sync.currentSyncReturnParams[kony.sync.uploadURL] = kony.sync.getUploadURL();
 		kony.sync.currentSyncReturnParams[kony.sync.downloadURL] = kony.sync.getDownloadURL();
@@ -4255,51 +4329,28 @@ kony.sync.checkIntegrity = function (dbname, rMap, successCallback, errorCallBac
 	}
 	var status = true;
 	var isError = false;
-	var tempTable = null;
+	var integrityFailedMap = null;
 	var connection = kony.sync.getConnectionOnly(dbname, dbname, errorCallBack, "Checking integrity");
 	if(connection !== null){
 		kony.sync.startTransaction(connection, integrityTransaction, integritySuccess, integrityFailure, "Checking Referential Integrity Constraints");
 	}
 	function integrityTransaction(tx) {
-		for(var obj in rMap){
-			for (var key in rMap[obj]) {
-				if (kony.sync.isNull(rMap[obj][key].targetAttributeValue)) {
-					continue;
-				}
-				if (kony.sync.isEmptyString(rMap[obj][key].targetAttributeValue)) {
-					rMap[obj][key].targetAttributeValue = "''";
-				}
-
-				var sql = "select * from " + obj + " where " + rMap[obj][key].sourceAttribute + " = " + rMap[obj][key].targetAttributeValue + "";
-				var resultSet = kony.sync.executeSql(tx, sql, null, errorCallBack);
-				if (resultSet !== false) {
-					if (resultSet.rows.length > 0) {
-						status = true;
-					} else {
-						status = false;
-						sync.log.error("Referential Integrity Check Failed", kony.sync.getErrorTable(kony.sync.errorCodeReferentialIntegrity, kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue)));
-						tempTable = kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue);
-						return;
-					}
-				} else {
-					status = false;
-					isError = true;
-					return;
-				}
-			}
-		}
+		integrityFailedMap = kony.sync.checkIntegrityinTransaction(tx,rMap);
 	}
 	function integritySuccess() {
-		if (status === true) {
+		var error = "";
+		if (integrityFailedMap === true) {
 			kony.sync.verifyAndCallClosure(successCallback);
 		}
 		else{
-			kony.sync.verifyAndCallClosure(errorCallBack, kony.sync.getErrorTable(kony.sync.errorCodeReferentialIntegrity, tempTable));
+			for(var key in integrityFailedMap){
+				error = error + integrityFailedMap[key];
+			}
+			kony.sync.verifyAndCallClosure(errorCallBack, kony.sync.getErrorTable(kony.sync.errorCodeReferentialIntegrity, error));
 		}
 	}
-	
 	function integrityFailure() {
-		if (!isError) {
+		if (!integrityFailedMap) {
 			kony.sync.showTransactionError(errorCallBack,"Checking integrity");
 		}else{
 			kony.sync.verifyAndCallClosure(errorCallBack, kony.sync.errorObject);
@@ -4308,32 +4359,49 @@ kony.sync.checkIntegrity = function (dbname, rMap, successCallback, errorCallBac
 	}
 };
 
-kony.sync.checkIntegrityinTransaction = function (tx, rMap, errorCallBack) {
+kony.sync.checkIntegrityinTransaction = function (tx, rMap) {
 	sync.log.trace("Entering kony.sync.checkIntegrityinTransaction ");
+	var integrityFailedMap = {};
 	if(!kony.sync.enableORMValidations){
 		return true;
 	}
+	
 	for(var obj in rMap){
 			for (var key in rMap[obj]) {
 				if (kony.sync.isNull(rMap[obj][key].targetAttributeValue)) {
+					continue;
+				}
+				if(integrityFailedMap[rMap[obj][key].foreignKeyAttribute] === false){
 					continue;
 				}
 				if(rMap[obj][key].targetAttributeValue === ""){
 					rMap[obj][key].targetAttributeValue = "''";
 				}
 				var sql = "select * from " + obj + " where " + rMap[obj][key].sourceAttribute + " = " + rMap[obj][key].targetAttributeValue + "";
-				var resultSet = kony.sync.executeSql(tx, sql, null, errorCallBack);
+				var resultSet = kony.sync.executeSql(tx, sql, null);
 				if (resultSet !== false) {
 					if (resultSet.rows.length === 0) {
 						sync.log.error("Referential Integrity Check Failed", kony.sync.getErrorTable(kony.sync.errorCodeReferentialIntegrity, kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue)));
-						return kony.sync.getErrorTable(kony.sync.errorCodeReferentialIntegrity, kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue));
+                        if(kony.sync.isNullOrUndefined(integrityFailedMap[rMap[obj][key].foreignKeyAttribute])){
+							integrityFailedMap[rMap[obj][key].foreignKeyAttribute] = kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue);
+						}else{
+							integrityFailedMap[rMap[obj][key].foreignKeyAttribute] = integrityFailedMap[rMap[obj][key].foreignKeyAttribute] + kony.sync.getReferetialIntegrityerrMessg(obj, rMap[obj][key].sourceAttribute, rMap[obj][key].targetAttributeValue);
+						}
+					}else {
+						integrityFailedMap[rMap[obj][key].foreignKeyAttribute] = false;
 					}
 				} else {
 					return false;
 				}
 			}
 	}
-	return true;
+	var logicalBreak = false;
+	for(var key in integrityFailedMap){
+		if(integrityFailedMap[key] !== false){
+			logicalBreak = true;
+		}
+	}
+	return logicalBreak === false?true:integrityFailedMap;
 };
 
 kony.sync.convertOrderByMapToValuesTable = function (orderByMap) {
@@ -5054,9 +5122,11 @@ sync.init = function(on_sync_init_success, on_sync_init_error) {
             loadSyncScope(0);
         }
 		var j = 0;
+		kony.sync.scopeDict = {};
 		if(!kony.sync.isNullOrUndefined(syncscopes)){
 			for (var i = 0; i < syncscopes.length; i++) {
 				var scope = syncscopes[i];
+				kony.sync.scopeDict[syncscopes[i].ScopeName] = scope;
 				currentscope = scope;
 				syncscopes[i] = scope;
 				scope.Index = i;
@@ -5183,10 +5253,24 @@ sync.init = function(on_sync_init_success, on_sync_init_error) {
 					isError = true;
 				}
             }
+			//Check for Sync Version 5.5.6
+			if(kony.sync.checkForUpdate556to559Schema(tx) === false){
+				isError = true;
+			}
+			//Check for Sync Version 5.5.9
+			if(kony.sync.checkForUpdate559to560Schema(tx) === false){
+				isError = true;
+			}
         }
 
         function loadSyncScopeSuccess() {
 			sync.log.trace("Entering loadSyncScopeSuccess");
+			//schema changed
+			if(kony.sync.configVersion !== konysyncClientSyncConfig.Version){
+				kony.sync.schemaUpgradeNeeded = true;
+				//kony.sync.verifyAndCallClosure(on_sync_init_error, kony.sync.getSchemaUpgradeNeededError());
+				//return;
+			}
 			if(isError === true){
 				kony.sync.verifyAndCallClosure(on_sync_init_error, kony.sync.getScopeLoadingFailed());
 			}
@@ -5274,12 +5358,6 @@ sync.init = function(on_sync_init_success, on_sync_init_error) {
             kony.sync.deviceId = configRow[kony.sync.syncConfigurationColumnDeviceIDName];
             kony.sync.instanceId = configRow[kony.sync.syncConfigurationColumnInstanceIDName];
 			kony.sync.configVersion = configRow[kony.sync.syncConfigurationColumnVersion];
-			//schema changed
-			if(kony.sync.configVersion !== konysyncClientSyncConfig.Version){
-				kony.sync.schemaUpgradeNeeded = true;
-				//kony.sync.verifyAndCallClosure(on_sync_init_error, kony.sync.getSchemaUpgradeNeededError());
-				//return;
-			}
             loadDatabase();
         }
 		var query = kony.sync.qb_createQuery();
@@ -5665,6 +5743,37 @@ sync.getAllPendingUploadInstances = function(retrieveOnlyCount, successcallback,
 		kony.sync.verifyAndCallClosure(successcallback, pendingUploadResult);
 	}
 };
+
+kony.sync.checkForUpdate556to559Schema = function(tx){
+	var sql = "select count(*) from " + kony.sync.chunkTableName;
+	var resultSet = kony.sync.executeSql(tx, sql, null,null,false);
+	if(resultSet === false){
+		//Alter scripts for 5.5.6 to 5.5.9 DB Update 
+		kony.sync.DDL556to559Update = [
+		"ALTER TABLE " + kony.sync.metaTableName + " ADD COLUMN " + kony.sync.metaTableUploadSyncTimeColumn + " nvarchar(1000)",
+		"CREATE TABLE " + kony.sync.pendingUploadTableName + " (" + kony.sync.metaTableScopeColumn + " nvarchar(100) not null," + kony.sync.pendingUploadTableUploadRequest + " text," + kony.sync.objectLevelInfo + " text," + kony.sync.pendingUploadTableInsertCount + " int," + kony.sync.pendingUploadTableUpdateCount + " int," + kony.sync.pendingUploadTableDeleteCount + " int," + kony.sync.pendingUploadTableBatchInsertCount + " int," + kony.sync.pendingUploadTableBatchUpdateCount + " int," + kony.sync.pendingUploadTableBatchDeleteCount + " int," + kony.sync.pendingUploadTableUploadLimit + " int,primary key (" + kony.sync.metaTableScopeColumn + "))",
+		"CREATE TABLE " + kony.sync.chunkTableName + " (" + kony.sync.chunkTableChunkId + " int not null," + kony.sync.chunkTablePayloadId + " nvarchar(50) not null," + kony.sync.metaTableScopeColumn + " nvarchar(100) not null," + kony.sync.chunkTableChunkData + " text," + kony.sync.chunkTableTimeStamp + " nvarchar(50),primary key (" + kony.sync.chunkTableChunkId + ", " + kony.sync.chunkTablePayloadId + ", " + kony.sync.metaTableScopeColumn + "))",
+		"CREATE TABLE " + kony.sync.chunkMetaTableName + " (" + kony.sync.chunkTablePayloadId + " nvarchar(50) not null," + kony.sync.metaTableScopeColumn + " nvarchar(100) not null," + kony.sync.metaTableChunkAck + " int," + kony.sync.metaTableChunkSize + " int," + kony.sync.metaTableChunkCount + " int," + kony.sync.metaTableChunkHashSum + " nvarchar(35)," + kony.sync.metaTableChunkDiscarded + " int,primary key (" + kony.sync.chunkTablePayloadId + ", "+ kony.sync.metaTableScopeColumn + "))"
+		];
+	}
+	return kony.sync.executeQueriesInTransaction(tx, kony.sync.DDL556to559Update);
+};
+
+kony.sync.checkForUpdate559to560Schema = function(tx){
+	var sql = "select count(" + kony.sync.metaTableSchemaUpgradeSyncTimeColumn + ") from " + kony.sync.metaTableName;
+	var resultSet = kony.sync.executeSql(tx, sql, null,null,false);
+	if(resultSet === false){
+		//Alter scripts for 5.5.9 to 5.6.0 DB Update 
+		kony.sync.configVersion = konysyncClientSyncConfig.Version;
+		kony.sync.DDL559to560Update = [
+		"ALTER TABLE " + kony.sync.syncConfigurationTableName + " ADD COLUMN " + kony.sync.syncConfigurationColumnSchemaUpgradeContext + " nvarchar(4000)",
+		"ALTER TABLE " + kony.sync.syncConfigurationTableName + " ADD COLUMN " + kony.sync.syncConfigurationColumnVersion + " nvarchar(4000)",
+		"ALTER TABLE " + kony.sync.metaTableName + " ADD COLUMN " + kony.sync.metaTableSchemaUpgradeSyncTimeColumn + " nvarchar(1000)",
+		"UPDATE " + kony.sync.syncConfigurationTableName + " SET " + kony.sync.syncConfigurationColumnVersion + " = '" + konysyncClientSyncConfig.Version + "' where rowid = 1"
+		];
+	}
+	return kony.sync.executeQueriesInTransaction(tx, kony.sync.DDL559to560Update);
+};
 //  **************** End KonySyncInit.js*******************
 
 
@@ -5719,7 +5828,7 @@ kony.sync.log.TRACE = {
 }; 
 
 //Global to maintain current loglevel
-kony.sync.currentLogLevel = kony.sync.log.TRACE;
+kony.sync.currentLogLevel = kony.sync.log.ERROR;
 
 
 
@@ -6856,7 +6965,7 @@ kony.sync.updateByPK = function (tbname, dbname, relationshipMap, pks, valuestab
 			}
 		}
 		if (null !== record || !kony.sync.enableORMValidations) {
-			errObject = kony.sync.checkIntegrityinTransaction(tx, relationshipMap, null);
+			errObject = kony.sync.checkIntegrityinTransaction(tx, relationshipMap);
 			if (errObject === false) {
 				isSuccess = false;
 				return;
@@ -7098,11 +7207,11 @@ kony.sync.qb_orderBy = function(query,orderByMap) {
 		var j=0;
 		for(var i in orderByMap){
 			if(j===0) {
-				orderByClause = orderByClause+orderByMap[i].key;
+				orderByClause = orderByClause+ " \"" + orderByMap[i].key +"\"";
 				j++;
 			}
 			else {
-				orderByClause = orderByClause+","+orderByMap[i].key;
+				orderByClause = orderByClause+",\""+ orderByMap[i].key + "\"";
 			}
 			if(orderByMap[i].sortType === "desc"){
 				orderByClause = orderByClause + " desc";
@@ -7119,9 +7228,9 @@ kony.sync.qb_distinct = function(query) {
 kony.sync.qb_orderby1 = function(query, colname, isasec) {
 	sync.log.trace("Entering kony.sync.qb_orderby1 ");
     if ((isasec)) {
-        query.orderbyclause = " order by " + colname;
+        query.orderbyclause = " order by \"" + colname +  "\"";
     } else {
-        query.orderbyclause = " order by " + colname + " desc ";
+        query.orderbyclause = " order by \"" + colname + "\" desc ";
     }
 };
 
@@ -7147,9 +7256,9 @@ kony.sync.qb_getupdatedfields = function(query) {
             updateStr = " set ";
         }
         if(v.value === "nil") {
-            updateStr = updateStr + " " + v.key + "=" + "null";
+            updateStr = updateStr + " \"" + v.key + "\"=" + "null";
         } else {
-            updateStr = updateStr + " " + v.key + "=" + "'" + v.value + "'";
+            updateStr = updateStr + " \"" + v.key + "\"=" + "'" + v.value + "'";
         }
         if (i < query.colvals.length-1) {
             updateStr = updateStr + ",";
@@ -7168,10 +7277,10 @@ kony.sync.qb_getparamupdatedfields = function(query) {
             updateStr = " set ";
         }
         if ((v.value === "nil")) {
-            updateStr = updateStr + " " + v.key + "=" + "null";
+            updateStr = updateStr + " \"" + v.key + "\"=" + "null";
         } else {
             var param = kony.sync.qb_createParam(v.key, query, v.value, params);
-            updateStr = updateStr + " " + v.key + "=" + param;
+            updateStr = updateStr + " \"" + v.key + "\"=" + param;
         }
         if (i < query.colvals.length - 1) {
             updateStr = updateStr + ",";
@@ -7255,9 +7364,9 @@ kony.sync.qb_getwhereclause = function(query) {
             }
             var conditionString = "";
             if ((condition.value === "nil")) {
-               conditionString = condition.key + kony.sync.qb_getoperatorString(condition.optype, true) + "null";
+               conditionString = "\"" + condition.key + "\" " + kony.sync.qb_getoperatorString(condition.optype, true) + "null";
             } else {
-               conditionString = condition.key + kony.sync.qb_getoperatorString(condition.optype, false) + "'" + condition.value + "' ";
+               conditionString = "\"" + condition.key + "\" " + kony.sync.qb_getoperatorString(condition.optype, false) + "'" + condition.value + "' ";
             }
 			if(condition.openbrace === true){
 				conditionString = " ( " + conditionString;
@@ -7318,7 +7427,7 @@ kony.sync.qb_getinsertcolums = function(query) {
 		for (var i = 0; i < query.colvals.length; i++) {
 			var colval = query.colvals[i];
 			count = count + 1;
-			retstr = retstr + colval.key;
+			retstr = retstr + "\"" + colval.key + "\"";
 			if ((count !== numCols)) {
 				retstr = retstr + ",";
 			}
@@ -7420,7 +7529,7 @@ kony.sync.qb_compile = function(query) {
 			var itable = kony.sync.qb_getparaminsertvalues(query);
             var iv = itable[0];
             params = itable[1];
-            sql = insertstring + kony.sync.qb_gettablename(query) + kony.sync.qb_getinsertcolums(query) + " values " + iv;
+            sql = insertstring + "\"" + kony.sync.qb_gettablename(query) + "\"" + kony.sync.qb_getinsertcolums(query) + " values " + iv;
 			if(query.isPurge === true){
 				kony.sync.queryStore[query.tablename+"purgeInsert"] = sql;
 			}
@@ -7429,7 +7538,7 @@ kony.sync.qb_compile = function(query) {
             wctable = kony.sync.qb_getparamwhereclause(query);
             wc = wctable[0];
             params = wctable[1];
-            sql = "select " + query.distinctclause + query.topclause + kony.sync.qb_getfieldstring(query) + " from " + kony.sync.qb_gettablename(query) + wc + query.orderbyclause;
+            sql = "select " + query.distinctclause + query.topclause + kony.sync.qb_getfieldstring(query) + " from \"" + kony.sync.qb_gettablename(query) + "\"" + wc + query.orderbyclause;
 			if(!kony.sync.isNullOrUndefined(query.limit)){
 				sql += " limit " + query.limit + " offset " + query.offset;
 			}
@@ -7441,7 +7550,7 @@ kony.sync.qb_compile = function(query) {
 			var uftable = kony.sync.qb_getparamupdatedfields(query);
             var uf = uftable[0];
             var uparams = uftable[1];
-			sql = "Update " + kony.sync.qb_gettablename(query) + " " + uf + " " + wc;
+			sql = "Update \"" + kony.sync.qb_gettablename(query) + "\" " + uf + " " + wc;
             for (var i = 0; i < wparams.length; i++) {
 					uparams.push(wparams[i]);
 			}
@@ -7454,24 +7563,24 @@ kony.sync.qb_compile = function(query) {
 			wctable = kony.sync.qb_getparamwhereclause(query);
 			wc = wctable[0];
             params = wctable[1];
-			sql = "delete from " + kony.sync.qb_gettablename(query) + " " + wc;
+			sql = "delete from \"" + kony.sync.qb_gettablename(query) + "\" " + wc;
             return [sql, params];
         }
     } else {
         ret = "";
         if ((query.operationtype === "select")) {
             sql = "select " + query.distinctclause + query.topclause + kony.sync.qb_getfieldstring(query) + 
-			" from " + kony.sync.qb_gettablename(query) + kony.sync.qb_getwhereclause(query) + query.orderbyclause;
+			" from \"" + kony.sync.qb_gettablename(query) + "\"" + kony.sync.qb_getwhereclause(query) + query.orderbyclause;
             return sql;
         } else if ((query.operationtype === "update")) {
-           return "Update " + kony.sync.qb_gettablename(query) + 
-			" " + kony.sync.qb_getupdatedfields(query) + 
+           return "Update \"" + kony.sync.qb_gettablename(query) + 
+			"\" " + kony.sync.qb_getupdatedfields(query) + 
 			" " + kony.sync.qb_getwhereclause(query);
         } else if ((query.operationtype === "insert")) {
-			return "insert into " + kony.sync.qb_gettablename(query) + 
+			return "insert into \"" + kony.sync.qb_gettablename(query) + "\"" +
 			kony.sync.qb_getinsertcolums(query) + " values " + kony.sync.qb_getinsertvalues(query);
         } else if ((query.operationtype === "delete")) {
-			return "delete from " + kony.sync.qb_gettablename(query) + " " + kony.sync.qb_getwhereclause(query);
+			return "delete from \"" + kony.sync.qb_gettablename(query) + "\" " + kony.sync.qb_getwhereclause(query);
         }
     }
 };
@@ -7984,6 +8093,10 @@ kony.sync.retryServiceCall = function(url, result, infoObj, retryCount, callback
 	sync.log.trace("Entering kony.sync.retryServiceCall");
 	sync.log.error("Error while hitting " + url + " : ", result);
 	sync.log.info("Retrying[" + retryCount + " retries left] ....");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var params1 = kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onRetry], {"request":params, "errorResponse":result, "retryCount":(kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey]-retryCount)});
 	if(!kony.sync.isNull(params1)){
 		params = params1;
@@ -7992,7 +8105,11 @@ kony.sync.retryServiceCall = function(url, result, infoObj, retryCount, callback
 	if (!kony.sync.isNull(kony.sync.currentSyncConfigParams[kony.sync.retryWaitKey])) {
 		retryWait = kony.sync.tonumber(kony.sync.currentSyncConfigParams[kony.sync.retryWaitKey]);
 	}
-	kony.timer.schedule("syncRetryTimer", retryTimerCallback, retryWait, false);
+	if(!kony.sync.isAppInBackground){ 
+		kony.timer.schedule("syncRetryTimer", retryTimerCallback, retryWait, false);
+	}else{
+		retryTimerCallback();
+	}
 	
 	function downloadNetworkCallbackStatus(status, callResult, info){
 		if(status === 400){
@@ -8004,6 +8121,8 @@ kony.sync.retryServiceCall = function(url, result, infoObj, retryCount, callback
 			else{
 				callback(callResult, info, retryCount);
 			}
+		}else if(status === 300){
+				callback(kony.sync.getNetworkCancelError(),info,retryCount);
 		}
 	}
 	
@@ -8016,12 +8135,20 @@ kony.sync.retryServiceCall = function(url, result, infoObj, retryCount, callback
 //Checks whether an error code is eligible for retry or not
 kony.sync.checkForRetryErrorCodes = function(key){
 	sync.log.trace("Entering kony.sync.checkForRetryErrorCodes");
-	if(!kony.sync.isNull(kony.sync.currentSyncConfigParams[kony.sync.retryErrorCodes])){
-		return kony.sync.contains(kony.sync.currentSyncConfigParams[kony.sync.retryErrorCodes], key);
-	}
-	else{
-		return kony.sync.contains([1000, 1013, 1014, 1015], key);
-	}
+			var deviceInfo = kony.os.deviceInfo();
+			if(kony.sync.isPhonegap){
+				return key === 1011;
+			}
+			else if(deviceInfo.osversion < 7){
+				if(!kony.sync.isNull(kony.sync.currentSyncConfigParams[kony.sync.retryErrorCodes])){
+					return kony.sync.contains(kony.sync.currentSyncConfigParams[kony.sync.retryErrorCodes], key);
+				}
+				else{
+					return kony.sync.contains([1000, 1013, 1014, 1015], key);
+				}
+			}else{
+				return key === 1012;
+			}
 };
 
 kony.sync.eligibleForRetry = function(opstatus, info){
@@ -8305,6 +8432,12 @@ kony.sync.upgradeSchema = function (callback) {
 			kony.sync.isSessionInProgress = false;
 			return;
 		}
+		else if(kony.sync.isNullOrUndefined(serverResponse.d)){
+			kony.sync.isSessionInProgress = false;
+			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onUpgradeQueriesDownloadErrorKey], kony.sync.getServerError(serverResponse));
+			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onSyncError], kony.sync.getServerError(serverResponse));
+			return;
+		}
 		if (serverResponse.d.error === "true") {
 			sync.log.error("Schema Upgrade Response : ", serverResponse);
 			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onUpgradeQueriesDownloadErrorKey], kony.sync.getServerError(
@@ -8421,7 +8554,7 @@ kony.sync.executeUpdateSchemaQueries = function (queries, upgradeContext, callba
 		}
 
 		/*upgrade schemaupgradesynccontext in metatable to "0,0" to indicate that download for new columns is pending*/
-		sql = "update " + kony.sync.metaTableName + " set " + kony.sync.metaTableSchemaUpgradeSyncTimeColumn + " = '0,0'";
+		sql = "update " + kony.sync.metaTableName + " set " + kony.sync.metaTableSchemaUpgradeSyncTimeColumn + " = '0,0' where " + kony.sync.metaTableSyncTimeColumn + " <> '' and " + kony.sync.metaTableSyncTimeColumn + " is not null" ;
 		if (kony.sync.executeSql(tx, sql, null) === false) {
 			isError = true;
 			return;
@@ -8568,6 +8701,10 @@ sync.isUpgradeRequired = function (config) {
 			}
 			return;
 		}
+		else if(kony.sync.isNullOrUndefined(serverResponse.d)){
+			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onIsUpgradeRequiredErrorKey], kony.sync.getServerError(serverResponse));
+			return;
+		}
 		if (serverResponse.d.error === "true") {
 			sync.log.error("Schema Upgrade Response : ", serverResponse);
 			kony.sync.verifyAndCallClosure(kony.sync.currentSyncConfigParams[kony.sync.onIsUpgradeRequiredErrorKey], kony.sync.getServerError(
@@ -8633,6 +8770,10 @@ if(typeof(sync) === "undefined") {
 
 kony.sync.konyDownloadChanges = function(serverblob, scope, downloadNetworkCallback,isInitialized, schemaUpgradeServerblob) {
     sync.log.trace("Entering kony.sync.konyDownloadChanges ");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var retries = kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey];
     function downloadNetworkCallbackStatus(status, result){
 		if(status === 400){
@@ -8650,6 +8791,8 @@ kony.sync.konyDownloadChanges = function(serverblob, scope, downloadNetworkCallb
 					downloadNetworkCallback(result);
 				}
 			}
+		}else if(status === 300){
+				downloadNetworkCallback(kony.sync.getNetworkCancelError());
 		}
 	}
 	
@@ -8748,6 +8891,10 @@ kony.sync.konyDownloadChanges = function(serverblob, scope, downloadNetworkCallb
 
 kony.sync.konyUploadChanges = function(changes, uploadNetworkcallback, lastBatch, lastjson) {
     sync.log.trace("Entering kony.sync.konyUploadChanges");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var results1 = [];
     var retries = kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey];
 	var jsonLua = null;
@@ -8766,6 +8913,8 @@ kony.sync.konyUploadChanges = function(changes, uploadNetworkcallback, lastBatch
 				results1 = null;
 				jsonLua = null;
 			}
+		}else if(status === 300){
+				uploadNetworkcallback(kony.sync.getNetworkCancelError(),json);
 		}
 	}
 	
@@ -8878,6 +9027,10 @@ kony.sync.konyUploadChanges = function(changes, uploadNetworkcallback, lastBatch
 
 kony.sync.konyRegisterDevice = function(registerDeviceCallback){
 	sync.log.trace("Entering kony.sync.konyRegisterDevice");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var retries = kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey];
     function registerDeviceCallbackStatus(status, result){
 		if(status === 400)
@@ -8891,6 +9044,8 @@ kony.sync.konyRegisterDevice = function(registerDeviceCallback){
 				kony.sync.setSessionID(result);
 				registerDeviceCallback(result);
 			}
+		}else if(status === 300){
+				registerDeviceCallback(kony.sync.getNetworkCancelError());
 		}
 	}
 	function retryCallback(result, info, retry){
@@ -8918,6 +9073,10 @@ kony.sync.konyRegisterDevice = function(registerDeviceCallback){
 
 kony.sync.callSchemaUpgradeService = function(schemaUpgradeCallback, scriptsRequired){
 	sync.log.trace("Entering kony.sync.callSchemaUpgradeService");
+	if(kony.sync.isSyncStopped){
+		kony.sync.stopSyncSession();
+		return;
+	}
 	var retries = kony.sync.currentSyncConfigParams[kony.sync.numberOfRetriesKey];
     function schemaUpgradeServiceStatus(status, result){
 		if(status === 400){
@@ -9017,10 +9176,59 @@ kony.sync.getSchemaUpgradeURL = function () {
 //this is how it would be called.
 kony.sync.invokeServiceAsync = function(url, params, callback, context){
 	if(kony.sync.isNull(kony.sync.currentSyncConfigParams[kony.sync.invokeServiceFunctionKey])){
-		kony.net.invokeServiceAsync(url, params, callback, context);
+			var deviceInfo = kony.os.deviceInfo();
+			var timeoutValue = 0;
+			var paramsHttpheaders = null;
+			if(kony.sync.isPhonegap || deviceInfo.osversion < 7){
+				kony.net.invokeServiceAsync(url, params, callback, context);
+			}else{
+				var paramsTable = new kony.net.FormData();
+				for(var key in params){
+					if(!kony.sync.isNull(params[key])){
+						if(key === "httpheaders"){
+							paramsHttpheaders = params[key];
+							continue;
+						}
+						if(key === "httpconfig"){
+							timeoutValue = kony.sync.tonumber(params[key]["timeout"]);
+							continue;
+						}
+						paramsTable.append((key),(params[key]));
+					}	
+				}
+				if(kony.sync.httprequestsession === null){
+					var httprequest = new kony.net.HttpRequest();	
+				}else{
+					var httprequest = new kony.net.HttpRequest(kony.sync.httprequestsession);
+				}
+				httprequest.backgroundTransfer = true;
+				kony.sync.httprequestsession = httprequest.getSession();
+				httprequest.onReadyStateChange = localRequestCallback;
+				httprequest.open(constants.HTTP_METHOD_POST,url);
+				if(timeoutValue !== 0){
+					httprequest.timeout = timeoutValue * 1000;
+				}
+				if(paramsHttpheaders !== null){
+					for(var key in paramsHttpheaders){
+						httprequest.setRequestHeader(key,paramsHttpheaders[key]);
+					}
+				}
+				if (paramsHttpheaders === null || typeof(paramsHttpheaders["Content-Type"]) === 'undefined') {
+					httprequest.setRequestHeader("Content-Type","application/json");
+				}
+				httprequest.send(paramsTable);
+			}
 	}
 	else{
 		kony.sync.currentSyncConfigParams[kony.sync.invokeServiceFunctionKey](url, params, callback, context);
+	}
+	function localRequestCallback(){
+		if(httprequest.readyState === 4 && httprequest.status === 200){
+			callback(400,httprequest.response,context);
+		}else if(httprequest.readyState === 4){
+			httprequest.response = {'opstatus':1012};
+			callback(400,httprequest.response,context);
+		}
 	}
 };
 
@@ -9049,12 +9257,12 @@ kony.sync.setSessionID = function(response){
 		kony.sync.sessionMap[kony.sync.konySyncRequestNumber] = response.d.__session.requestnumber;
 		kony.sync.isFirstNetworkCall = false;
 	}
-}
+};
 
 kony.sync.resetSessionVars = function(){
 	kony.sync.sessionMap = {};
 	kony.sync.isFirstNetworkCall = true;
-}
+};
 //  **************** End konySyncServiceProvider.js*******************
 
 
@@ -9560,6 +9768,10 @@ kony.sync.syncUploadChangesForBatch = function(rowItem, previousUpload, limit) {
 			}
             return;
         }
+		else if(kony.sync.isNullOrUndefined(otaServerChanges.d)){
+			kony.sync.onUploadCompletion(true, kony.sync.getServerError(otaServerChanges));
+			return;
+		}
 		function addLastUploadRequestCallback(){
 			sync.log.trace("Entering kony.sync.syncUploadChangesForBatch->addLastUploadRequestCallback");
 			kony.sync.onUploadCompletion(true, kony.sync.getServerError(otaServerChanges));
@@ -10549,6 +10761,5 @@ kony.sync.alert = function(msg){
 	}
 };
 //  **************** End KonySyncValidations.js*******************
-
 
 module.exports = sync;

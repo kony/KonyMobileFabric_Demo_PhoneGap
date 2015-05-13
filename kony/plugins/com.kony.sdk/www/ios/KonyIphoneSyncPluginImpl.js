@@ -284,7 +284,8 @@ kony.crypto.createHash = function(hashType, text){
 
 
 kony.os.deviceInfo = function(){
-	return {name:device.platform,version:device.version,model:device.model,deviceid:device.uuid,identifierForVendor:device.uuid}
+	kony.sync.isPhonegap = true;
+	return {name:device.platform,osversion:device.version,model:device.model,deviceid:device.uuid,identifierForVendor:device.uuid}
 }
 kony.os.userAgent=function(){
     return " " + device.platform + " " + device.model;

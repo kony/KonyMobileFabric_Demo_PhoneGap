@@ -1,19 +1,18 @@
-// configure meta data here
 
-var MBaaSConfig ={
-                //"SFUsername" : "sreenivasn@gmail.com",
-    			//"SFPassword" : "Kony@(877uJ8SgCQtfWM8h64QgzSUJxu",   
-                "AppKey" : "beca5f6ba7464fe3aca5d59f94ab1e27",
-    			"AppSecret" : "45e2fb15385d44cc00f3303e95f3abd2",
-    			"ServiceURL" : "https://100003520.auth.konycloud.com/appconfig",
-    			"IdentityService" : "SForceIdentity",
-    			"AccountIntegrationService":"SForceAccount",
-    			"LeadIntegrationService":"SForceLead",
-               	"ContactIntegrationService":"SForceContact",
-    			"OpportunitiesIntegrationService":"SForceOpportunity",
-    			"KMSID":"sreenivasulu.reddy@kony.com",   
-    			"getContactQuery":{ "queryString":"SELECT ID,NAME,FIRSTNAME,LASTNAME,TITLE,PHONE,EMAIL FROM Contact"},
-    			"getAccountQuery":{ "queryString":"SELECT name,type,BillingCity,BillingState,AnnualRevenue,website,Industry,phone,BillingStreet from Account where type!=null"},
-    			"getLeadQuery":   { "queryString":"SELECT ID,NAME,FIRSTNAME,LASTNAME,TITLE,PHONE,EMAIL FROM Lead"},
-    			"getOpportunityQuery":{ "queryString":"SELECT name,Amount,CloseDate,Type,LeadSource,StageName,ExpectedRevenue,Probability from Opportunity"}
+MBaaSConfig ={
+    "DefaultUsername" : "sreenivasn@gmail.com", 
+    "DefaultPassword" : "Kony@#214Q2HZyOWh5WcwIz2BlmF3N8LD",    
+    "AppKey" : "68fac5743b3667b1d20dbd97485f6208", 
+    "AppSecret" : "29971de24e4a912bf26c4184c4209585", 
+    "IdentityService" : "SyncDemoId",
+    "AccountIntegrationService":"AccountIntgService",
+    "LeadIntegrationService":"LeadIntgService",
+    "ContactIntegrationService":"ContactSyncIntg",
+    "OpportunitiesIntegrationService":"OpportunityIntgService",
+    "ServiceURL" : "https://100003520.auth.konycloud.com/appconfig",
+    "KMSID":"sreenivasulu.reddy@kony.com",    
+    "getContactQuery":{ "queryString":"Select Id, FirstName, LastName, Title, AccountId, Phone, email, Department,Fax,ReportsToId, BirthDate, IsDeleted, LastModifiedDate from Contact"},
+    "getAccountQuery":{ "queryString":"Select Id, AccountNumber, Name, Type, Rating,IsDeleted,Phone,Fax,LastModifiedDate, Website, AnnualRevenue, BillingAddress from Account"},
+    "getLeadQuery":   { "queryString":"SELECT ID,NAME,FIRSTNAME,LASTNAME,TITLE,PHONE,EMAIL,IsDeleted, LastModifiedDate FROM Lead"},
+    "getOpportunityQuery":{ "queryString":"Select Id, Name, AccountId, Type, IsDeleted,LastModifiedDate, CloseDate, StageName  from Opportunity"}
 };
