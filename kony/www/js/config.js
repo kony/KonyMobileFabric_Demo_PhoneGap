@@ -4,7 +4,7 @@ MBaaSConfig ={
     "DefaultPassword" : "Kony@#214Q2HZyOWh5WcwIz2BlmF3N8LD",    
     "AppKey" : "68fac5743b3667b1d20dbd97485f6208", 
     "AppSecret" : "29971de24e4a912bf26c4184c4209585", 
-    "IdentityService" : "SyncDemoId",
+    "IdentityService" : "SyncDemoIdService",
     "AccountIntegrationService":"AccountIntgService",
     "LeadIntegrationService":"LeadIntgService",
     "ContactIntegrationService":"ContactSyncIntg",
