@@ -3,8 +3,8 @@
 MBaaSConfig ={
     "DefaultUsername" : "sreenivasn@gmail.com", 
     "DefaultPassword" : "Kony@#214Q2HZyOWh5WcwIz2BlmF3N8LD",    
-    "AppKey" : "68fac5743b3667b1d20dbd97485f6203", 
-    "AppSecret" : "29971de24e4a912bf26c4184c4209585", 
+    "AppKey" : "27ce4b1e7a11a43b51a4c52859190c2b", 
+    "AppSecret" : "abea6c780bb71473abccf2f164cbf7c9", 
     "IdentityService" : "SyncDemoIdService",
     "AccountIntegrationService":"AccountIntgService",
     "LeadIntegrationService":"LeadIntgService",
