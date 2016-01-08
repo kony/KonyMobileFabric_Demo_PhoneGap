@@ -1,47 +1,36 @@
 var konyObject;
 var identity;
-
+var syncObj;
 $(function() {
-	ldr.show();
-	setTimeout(function(){
-        konyObject = new kony.sdk();
-	    konyObject.init(
-	        MBaaSConfig.AppKey,
-	        MBaaSConfig.AppSecret,
-	        MBaaSConfig.ServiceURL,   
-	        InitSuccessCallback,
-	        InitFailureCallback
-	    );
-	},1000);
+    
+
+	
 	// event handler for login button
 	$("#login").click(function () {
-
-		var username = $.trim($("#username").val());
-		var password = $("#password").val();
-		
-		if (username == "") {
-			alert('Please Enter User Name');
-			return false;
-		}else if (password == "") {
-			alert('Please Enter Password');
-			return false;
-		}else{
+		console.log('##### show loader');
+		$('#loaderpage').show();
+		//setTimeout(function(){
+			console.log('##### in login.js function');
+			//debugger;
 			ldr.show();
-			
-			//login request parameters
-			var loginObj = {"userid" : username,"password" : password };
-			
-			//Calling auth function for getting Authentication service handler
-			identity = konyObject.getIdentityService(MBaaSConfig.IdentityService);
-			//Login Validation using autentication service handler object
-			identity.login(loginObj,LoginSuccessCallback,LoginFailureCallback);
-		}
+	        konyObject = new kony.sdk();
+		    konyObject.init(
+		        MBaaSConfig.AppKey,
+		        MBaaSConfig.AppSecret,
+		        MBaaSConfig.ServiceURL,   
+		        InitSuccessCallback,
+		        InitFailureCallback
+		    );
+		//},1000);
+
+		ldr.hide();
 	});
     
 });
 
 /***************** init callbacks starts here  ****************/
 var InitSuccessCallback = function(data){
+	ldr.show();
 	if(localStorage.konycurrentUser){
 		var userDetails = JSON.parse(localStorage.konycurrentUser);
 		if(userDetails.username){
@@ -49,6 +38,31 @@ var InitSuccessCallback = function(data){
 			$("#password").val(crypt.decode(userDetails.password));
 		}
 	}
+
+	var username = $.trim($("#username").val());
+	var password = $("#password").val();
+	username=MBaaSConfig.DefaultUsername;
+	password=MBaaSConfig.DefaultPassword;	
+	if (username == "") {
+		alert('Please Enter User Name');
+		return false;
+	}else if (password == "") {
+		alert('Please Enter Password');
+		return false;
+	}else{
+		
+		//ldr.show();
+		
+		//login request parameters
+		var loginObj = {"userid" : username,"password" : password };
+		
+		//Calling auth function for getting Authentication service handler
+		identity = konyObject.getIdentityService(MBaaSConfig.IdentityService);
+		//Login Validation using autentication service handler object
+		console.log('username : ' + username + ' password is : ' + password);
+		identity.login(loginObj,LoginSuccessCallback,LoginFailureCallback);
+	}
+
 	ldr.hide();
 };
 
@@ -69,11 +83,32 @@ var LoginSuccessCallback = function(data){
 		localStorage.konycurrentUser = JSON.stringify(currentUser); //storing user details in local storage
 	}
 	
+	syncObj=konyObject.getSyncService();
+	syncObj.init(syncInitSuccess,syncInitFailure);
+	
 	//Manipulate user data here if needed
 	identity.getBackendToken('false','',BackendTokenSuccessCallback,BackendTokenFailureCallback); // Getting BackendToken
-
+	//ldr.hide();
 };
 
+var syncInitSuccess = function(data){
+	//ldr.hide();
+	console.log('##### hide loader');
+	//ldr.hide();
+	console.log(" in syncInitSuccess ");
+	
+	
+	//console.log(JSON.stringify(data));
+	//debugger;
+	//alert(JSON.stringify(data));
+	return false;
+};
+var syncInitFailure = function(data){
+	ldr.hide();
+	console.log(JSON.stringify(data));	
+	alert(JSON.stringify(data));
+	return false;
+};
 var LoginFailureCallback = function(data){
 	ldr.hide();
 	console.log(JSON.stringify(data));
@@ -107,7 +142,7 @@ var BackendTokenSuccessCallback = function(data){
 	else{
         changePage("Dashboard",'bg-primary');
         
-        ldr.hide(); 
+        //ldr.hide(); 
     }
 	  
 };
