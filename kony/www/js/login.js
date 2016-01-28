@@ -83,8 +83,8 @@ var LoginSuccessCallback = function(data){
 		localStorage.konycurrentUser = JSON.stringify(currentUser); //storing user details in local storage
 	}
 	
-	syncObj=konyObject.getSyncService();
-	syncObj.init(syncInitSuccess,syncInitFailure);
+	//syncObj=konyObject.getSyncService();
+	//syncObj.init(syncInitSuccess,syncInitFailure);
 	
 	//Manipulate user data here if needed
 	identity.getBackendToken('false','',BackendTokenSuccessCallback,BackendTokenFailureCallback); // Getting BackendToken
