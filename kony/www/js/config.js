@@ -1,8 +1,8 @@
 MBaaSConfig ={
 
-    "DefaultUsername" : "crmsampleapp@gmail.com",
+    //"DefaultUsername" : "crmsampleapp@gmail.com",
 
-    "DefaultPassword" : "sfdcsampleapp@123",
+    //"DefaultPassword" : "sfdcsampleapp@123",
 
     "AppKey" : "8d350449724651922a99f053632e0fbf",
 

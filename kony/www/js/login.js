@@ -41,8 +41,8 @@ var InitSuccessCallback = function(data){
 
 	var username = $.trim($("#username").val());
 	var password = $("#password").val();
-	username=MBaaSConfig.DefaultUsername;
-	password=MBaaSConfig.DefaultPassword;	
+	//username=MBaaSConfig.DefaultUsername;
+	//password=MBaaSConfig.DefaultPassword;	
 	if (username == "") {
 		alert('Please Enter User Name');
 		return false;
