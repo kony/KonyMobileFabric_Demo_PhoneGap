@@ -3,13 +3,10 @@ var identity;
 var syncObj;
 $(function() {
     
-
-	
 	// event handler for login button
 	$("#login").click(function () {
 		console.log('##### show loader');
 		$('#loaderpage').show();
-		//setTimeout(function(){
 			console.log('##### in login.js function');
 			//debugger;
 			ldr.show();
@@ -21,8 +18,6 @@ $(function() {
 		        InitSuccessCallback,
 		        InitFailureCallback
 		    );
-		//},1000);
-
 		ldr.hide();
 	});
     
@@ -30,7 +25,6 @@ $(function() {
 
 /***************** init callbacks starts here  ****************/
 var InitSuccessCallback = function(data){
-	ldr.show();
 	if(localStorage.konycurrentUser){
 		var userDetails = JSON.parse(localStorage.konycurrentUser);
 		if(userDetails.username){
@@ -41,8 +35,6 @@ var InitSuccessCallback = function(data){
 
 	var username = $.trim($("#username").val());
 	var password = $("#password").val();
-	//username=MBaaSConfig.DefaultUsername;
-	//password=MBaaSConfig.DefaultPassword;	
 	if (username == "") {
 		alert('Please Enter User Name');
 		return false;
@@ -50,15 +42,12 @@ var InitSuccessCallback = function(data){
 		alert('Please Enter Password');
 		return false;
 	}else{
-		
-		//ldr.show();
-		
-		//login request parameters
+	
 		var loginObj = {"userid" : username,"password" : password };
 		
 		//Calling auth function for getting Authentication service handler
 		identity = konyObject.getIdentityService(MBaaSConfig.IdentityService);
-		//Login Validation using autentication service handler object
+		//Login Validation using authentication service handler object
 		console.log('username : ' + username + ' password is : ' + password);
 		identity.login(loginObj,LoginSuccessCallback,LoginFailureCallback);
 	}
@@ -67,7 +56,7 @@ var InitSuccessCallback = function(data){
 };
 
 var InitFailureCallback = function(data){
-    alert(JSON.stringify(data));
+	alert(JSON.stringify(data));
 	ldr.hide();
 };
 /*****************  init callbacks ends here  ****************/
@@ -92,15 +81,8 @@ var LoginSuccessCallback = function(data){
 };
 
 var syncInitSuccess = function(data){
-	//ldr.hide();
 	console.log('##### hide loader');
-	//ldr.hide();
 	console.log(" in syncInitSuccess ");
-	
-	
-	//console.log(JSON.stringify(data));
-	//debugger;
-	//alert(JSON.stringify(data));
 	return false;
 };
 var syncInitFailure = function(data){
@@ -112,8 +94,7 @@ var syncInitFailure = function(data){
 var LoginFailureCallback = function(data){
 	ldr.hide();
 	console.log(JSON.stringify(data));
-	alert(JSON.stringify(data));
-	return false;
+	alert("Login with invalid SalesForce user password.");
 };
 /****************  Login callbacks ends here  ****************/
 
@@ -141,8 +122,6 @@ var BackendTokenSuccessCallback = function(data){
 	    }
 	else{
         changePage("Dashboard",'bg-primary');
-        
-        //ldr.hide(); 
     }
 	  
 };
